@@ -1,15 +1,18 @@
-# pages/1_Executive_Dashboard.py
+# pages/6_Advanced_Analytics.py
 
 import streamlit as st
 import pandas as pd
+import numpy as np
+import plotly.express as px
 import plotly.graph_objects as go
 from calculations.data_engine import EngineeringData
 from calculations.gt_performance import GTPerformance
-from utils.unit_helpers import get_heat_rate_unit, set_heat_rate_unit, convert_hr, get_hr_label
+from calculations.excel_reader import load_raw_data, load_demo_data
+from utils.unit_helpers import get_heat_rate_unit, set_heat_rate_unit, convert_hr
 
-st.set_page_config(page_title="Executive Dashboard", layout="wide")
+st.set_page_config(page_title="Advanced Analytics", layout="wide")
 
-# ---- Unit selector in sidebar ----
+# ---- Unit selector ----
 with st.sidebar:
     st.header("⚙️ Settings")
     current_unit = get_heat_rate_unit()
@@ -17,207 +20,632 @@ with st.sidebar:
         "Heat Rate Unit",
         options=["kJ/kWh", "kcal/kWh"],
         index=0 if current_unit == "kJ/kWh" else 1,
-        key="hr_unit_radio"
+        key="hr_unit_radio_adv"
     )
     if new_unit != current_unit:
         set_heat_rate_unit(new_unit)
         st.rerun()
 
-st.title("📊 Executive Dashboard — GT Performance Summary")
+st.title("📈 Advanced Engineering Analytics")
+st.markdown("""
+Diagnostic & descriptive intelligence — trend detection, mode analysis, decomposition, and envelope mapping.
+""")
 
-# Load data
+# ---- Load all data ----
 eng = EngineeringData()
 db = eng.db
 gt = GTPerformance(db)
+raw_df = load_raw_data()
+demo_df = load_demo_data()
 
-# Get all snapshots
 snapshots = db.snapshots_list()
+unit = get_heat_rate_unit()
 
-# --- Compute results for all snapshots ---
-results = []
+# ---- Helper functions ----
+def get_snapshot_datetime(snapshot):
+    """Return a datetime object for a given snapshot using Demo_Assumptions."""
+    row = demo_df[demo_df["Test"] == snapshot]
+    if row.empty:
+        return None
+    date_str = row["Date"].iloc[0]
+    time_str = row["Time"].iloc[0]
+    # Handle if date is string or datetime
+    if isinstance(date_str, str):
+        date_str = pd.to_datetime(date_str).date()
+    if isinstance(time_str, str):
+        try:
+            time_str = pd.to_datetime(time_str).time()
+        except:
+            time_str = pd.Timestamp("00:00:00").time()
+    return pd.Timestamp.combine(date_str, time_str) if hasattr(date_str, "year") else None
+
+def get_mode(snapshot):
+    """Extract MODE value from raw data."""
+    mode_row = raw_df[raw_df["Parameter"] == "MODE"]
+    if mode_row.empty:
+        return None
+    return mode_row[snapshot].iloc[0]
+
+def get_spread(snapshot, tag):
+    """Get a specific spread value."""
+    try:
+        return db.value(tag, snapshot)
+    except:
+        return None
+
+def get_vibration(snapshot, tag):
+    """Get a specific vibration value."""
+    try:
+        return db.value(tag, snapshot)
+    except:
+        return None
+
+# ---- 1. PERFORMANCE DEGRADATION TREND ----
+st.header("📉 1. Performance Degradation Trend")
+st.markdown("Tracks key KPIs (Heat Rate, Output, Efficiency) over time with a linear trend line to detect degradation.")
+
+# Gather data with dates
+trend_data = []
 for snap in snapshots:
+    dt = get_snapshot_datetime(snap)
+    if dt is None:
+        continue
     res = gt.calculate(snap)
-    if "error" not in res:
-        results.append(res)
+    if "error" not in res and res.get("gross_heat_rate_kj_per_kwh") is not None:
+        trend_data.append({
+            "Snapshot": snap,
+            "Date": dt,
+            "Gross HR (kJ/kWh)": res["gross_heat_rate_kj_per_kwh"],
+            "Corrected HR (kJ/kWh)": res["corrected_heat_rate_kj_per_kwh"],
+            "Output (MW)": res["gross_output_mw"],
+            "Efficiency (%)": res["thermal_efficiency_percent"],
+        })
 
-if not results:
-    st.error("No valid data found for any snapshot.")
-    st.stop()
-
-df = pd.DataFrame(results)
-
-# ---- Convert heat rates to selected unit ----
-df["gross_hr_display"] = df["gross_heat_rate_kj_per_kwh"].apply(lambda x: convert_hr(x, "kJ/kWh"))
-df["corrected_hr_display"] = df["corrected_heat_rate_kj_per_kwh"].apply(lambda x: convert_hr(x, "kJ/kWh"))
-
-# --- Top Metrics ---
-st.subheader("📈 Overall Performance Summary")
-col1, col2, col3, col4 = st.columns(4)
-
-avg_output = df["gross_output_mw"].mean()
-avg_hr = df["gross_hr_display"].mean()
-avg_eff = df["thermal_efficiency_percent"].mean()
-best_hr_snap = df.loc[df["gross_hr_display"].idxmin(), "snapshot"]
-
-with col1:
-    st.metric("Avg Gross Output", f"{avg_output:.1f} MW")
-with col2:
-    unit = get_heat_rate_unit()
-    st.metric(f"Avg Gross HR", f"{avg_hr:.0f} {unit}")
-with col3:
-    st.metric("Avg Efficiency", f"{avg_eff:.2f} %")
-with col4:
-    st.metric("Best HR Snapshot", best_hr_snap)
+if len(trend_data) < 2:
+    st.warning("Not enough data points (with valid dates) to show a trend.")
+else:
+    df_trend = pd.DataFrame(trend_data).sort_values("Date")
+    
+    # Convert HR to selected unit
+    df_trend["Gross HR"] = df_trend["Gross HR (kJ/kWh)"].apply(lambda x: convert_hr(x, "kJ/kWh"))
+    df_trend["Corrected HR"] = df_trend["Corrected HR (kJ/kWh)"].apply(lambda x: convert_hr(x, "kJ/kWh"))
+    
+    # Add trend line (linear regression)
+    x_num = np.arange(len(df_trend))
+    coeffs = np.polyfit(x_num, df_trend["Gross HR"], 1)
+    trend_line = np.polyval(coeffs, x_num)
+    df_trend["HR Trend"] = trend_line
+    slope_hr = coeffs[0]
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            "HR Degradation Slope",
+            f"{slope_hr:.2f} {unit}/point",
+            delta=f"{slope_hr * len(df_trend):.1f} {unit} over entire period",
+            delta_color="inverse" if slope_hr > 0 else "normal"
+        )
+    with col2:
+        # Output trend
+        coeffs_out = np.polyfit(x_num, df_trend["Output (MW)"], 1)
+        slope_out = coeffs_out[0]
+        st.metric(
+            "Output Degradation Slope",
+            f"{slope_out:.3f} MW/point",
+            delta=f"{slope_out * len(df_trend):.2f} MW over entire period",
+            delta_color="inverse" if slope_out < 0 else "normal"
+        )
+    
+    # Plot HR over time
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_trend["Date"],
+        y=df_trend["Gross HR"],
+        mode="lines+markers",
+        name=f"Gross HR ({unit})",
+        marker=dict(size=10),
+        line=dict(width=2),
+        hovertemplate="<b>%{text}</b><br>Date: %{x}<br>HR: %{y:.1f} " + unit + "<extra></extra>",
+        text=df_trend["Snapshot"],
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_trend["Date"],
+        y=df_trend["Corrected HR"],
+        mode="lines+markers",
+        name=f"Corrected HR ({unit})",
+        marker=dict(size=10, symbol="diamond"),
+        line=dict(width=2, dash="dash"),
+        hovertemplate="<b>%{text}</b><br>Date: %{x}<br>HR: %{y:.1f} " + unit + "<extra></extra>",
+        text=df_trend["Snapshot"],
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_trend["Date"],
+        y=df_trend["HR Trend"],
+        mode="lines",
+        name=f"Trend Line ({slope_hr:.2f} {unit}/point)",
+        line=dict(color="gray", dash="dot"),
+    ))
+    fig.update_layout(
+        xaxis=dict(title="Date"),
+        yaxis=dict(title=f"Gross Heat Rate ({unit})"),
+        height=400,
+        legend=dict(x=0.01, y=0.99),
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
-# --- Chart 1: Output vs Heat Rate (Dual Axis) ---
-st.subheader("📉 Output & Heat Rate Trends")
+# ---- 2. MODE COMPARISON ----
+st.header("⚙️ 2. Mode Comparison")
+st.markdown("Groups snapshots by operating mode (`MODE`) and compares average performance.")
 
-fig1 = go.Figure()
+# Build mode data
+mode_data = []
+for snap in snapshots:
+    mode = get_mode(snap)
+    if mode is None or str(mode).strip() == "":
+        continue
+    res = gt.calculate(snap)
+    if "error" not in res and res.get("gross_heat_rate_kj_per_kwh") is not None:
+        mode_data.append({
+            "Snapshot": snap,
+            "Mode": str(mode).strip(),
+            "Gross HR": convert_hr(res["gross_heat_rate_kj_per_kwh"], "kJ/kWh"),
+            "Corrected HR": convert_hr(res["corrected_heat_rate_kj_per_kwh"], "kJ/kWh"),
+            "Output (MW)": res["gross_output_mw"],
+            "Efficiency (%)": res["thermal_efficiency_percent"],
+        })
 
-# Add Gross Output (bar chart)
-fig1.add_trace(go.Bar(
-    x=df["snapshot"],
-    y=df["gross_output_mw"],
-    name="Gross Output (MW)",
-    marker_color="royalblue",
-    yaxis="y1",
-    text=df["gross_output_mw"].round(1),
-    textposition="outside",
-))
+if not mode_data:
+    st.warning("No operating mode data found (MODE column might be missing).")
+else:
+    df_mode = pd.DataFrame(mode_data)
+    # Aggregate
+    mode_agg = df_mode.groupby("Mode").agg({
+        "Gross HR": "mean",
+        "Corrected HR": "mean",
+        "Output (MW)": "mean",
+        "Efficiency (%)": "mean",
+        "Snapshot": "count"
+    }).rename(columns={"Snapshot": "Count"}).reset_index()
+    
+    # Display as bar chart
+    fig_mode = go.Figure()
+    fig_mode.add_trace(go.Bar(
+        x=mode_agg["Mode"],
+        y=mode_agg["Gross HR"],
+        name=f"Avg Gross HR ({unit})",
+        marker_color="royalblue",
+        text=mode_agg["Gross HR"].round(1),
+        textposition="outside"
+    ))
+    fig_mode.add_trace(go.Bar(
+        x=mode_agg["Mode"],
+        y=mode_agg["Corrected HR"],
+        name=f"Avg Corrected HR ({unit})",
+        marker_color="crimson",
+        text=mode_agg["Corrected HR"].round(1),
+        textposition="outside"
+    ))
+    fig_mode.update_layout(
+        xaxis=dict(title="Operating Mode"),
+        yaxis=dict(title=f"Heat Rate ({unit})"),
+        barmode="group",
+        height=400,
+        legend=dict(x=0.01, y=0.99),
+    )
+    st.plotly_chart(fig_mode, use_container_width=True)
+    
+    # Also show Efficiency comparison
+    fig_eff = go.Figure()
+    fig_eff.add_trace(go.Bar(
+        x=mode_agg["Mode"],
+        y=mode_agg["Efficiency (%)"],
+        name="Avg Efficiency (%)",
+        marker_color="seagreen",
+        text=mode_agg["Efficiency (%)"].round(2),
+        textposition="outside"
+    ))
+    fig_eff.update_layout(
+        xaxis=dict(title="Operating Mode"),
+        yaxis=dict(title="Efficiency (%)"),
+        height=350,
+    )
+    st.plotly_chart(fig_eff, use_container_width=True)
+    
+    with st.expander("📋 Mode Aggregation Table"):
+        st.dataframe(mode_agg.style.format({
+            "Gross HR": "{:.1f}",
+            "Corrected HR": "{:.1f}",
+            "Output (MW)": "{:.2f}",
+            "Efficiency (%)": "{:.2f}",
+            "Count": "{}",
+        }), use_container_width=True)
 
-# Add Gross Heat Rate (line chart, secondary axis)
-fig1.add_trace(go.Scatter(
-    x=df["snapshot"],
-    y=df["gross_hr_display"],
-    name=f"Gross HR ({unit})",
-    mode="lines+markers",
-    marker_color="crimson",
-    line=dict(width=3),
-    yaxis="y2",
-    text=df["gross_hr_display"].round(0),
-    textposition="top center",
-))
+st.divider()
 
-# Add Corrected HR (line, secondary axis)
-fig1.add_trace(go.Scatter(
-    x=df["snapshot"],
-    y=df["corrected_hr_display"],
-    name=f"Corrected HR ({unit})",
-    mode="lines+markers",
-    marker_color="darkorange",
-    line=dict(width=3, dash="dash"),
-    yaxis="y2",
-    text=df["corrected_hr_display"].round(0),
-    textposition="bottom center",
-))
+# ---- 3. HEAT RATE DECOMPOSITION (WATERFALL) ----
+st.header("🧩 3. Heat Rate Decomposition (Waterfall)")
+st.markdown("Breaks down the difference between the selected snapshot and the baseline into contributions from each correction factor (C1..C9).")
 
-fig1.update_layout(
-    xaxis=dict(title="Snapshot"),
-    yaxis=dict(title="Output (MW)", side="left", showgrid=True),
-    yaxis2=dict(
-        title=get_hr_label(),
-        side="right",
-        overlaying="y",
-        showgrid=False,
-    ),
-    legend=dict(x=0.01, y=0.99),
-    height=450,
-    hovermode="x unified",
+# Select baseline and target
+baseline_snap = st.selectbox(
+    "Baseline Snapshot",
+    snapshots,
+    index=0,
+    key="waterfall_baseline"
+)
+target_snap = st.selectbox(
+    "Target Snapshot",
+    snapshots,
+    index=min(1, len(snapshots)-1),
+    key="waterfall_target"
 )
 
-st.plotly_chart(fig1, use_container_width=True)
+if st.button("Run Decomposition", key="waterfall_btn"):
+    if target_snap == baseline_snap:
+        st.info("Target and baseline are the same — no decomposition to show.")
+    else:
+        # Get correction factors for both
+        base_factors = gt.corrections.get_factors(baseline_snap)
+        target_factors = gt.corrections.get_factors(target_snap)
+        
+        # Get HR values
+        base_res = gt.calculate(baseline_snap)
+        target_res = gt.calculate(target_snap)
+        
+        if "error" in base_res or "error" in target_res:
+            st.error("Error calculating performance for one of the snapshots.")
+        else:
+            base_hr = convert_hr(base_res["gross_heat_rate_kj_per_kwh"], "kJ/kWh")
+            target_hr = convert_hr(target_res["gross_heat_rate_kj_per_kwh"], "kJ/kWh")
+            delta_total = target_hr - base_hr
+            
+            # Calculate contribution of each factor
+            # Method: Start from baseline HR, apply each factor's relative change
+            # We'll use the ratio of factors: Cx_target / Cx_baseline
+            c_keys = [f"C{i}_" for i in range(1, 10)]
+            c_names = {
+                "C1_inlet_temp": "C1: Inlet Temp",
+                "C2_inlet_rh": "C2: Humidity",
+                "C3_ambient_press": "C3: Pressure",
+                "C4_fuel_composition": "C4: Fuel Comp",
+                "C5_generator_pf": "C5: Generator PF",
+                "C6_inlet_loss": "C6: Inlet Loss",
+                "C7_exhaust_loss": "C7: Exhaust Loss",
+                "C8_fuel_temp": "C8: Fuel Temp",
+                "C9_misc": "C9: Misc",
+            }
+            
+            # Compute relative contributions
+            contributions = []
+            cumulative = base_hr
+            for key in c_names.keys():
+                if key in target_factors and key in base_factors:
+                    base_val = base_factors[key]
+                    target_val = target_factors[key]
+                    if base_val != 0:
+                        # Approximate contribution: (target_factor / base_factor - 1) * base_hr
+                        # But a better way: sequential multiplication
+                        ratio = target_val / base_val
+                        # We'll do incremental waterfall
+                        pass
+                    contributions.append({
+                        "Factor": c_names[key],
+                        "Base": base_val,
+                        "Target": target_val,
+                        "Ratio": target_val / base_val if base_val != 0 else 1.0,
+                    })
+            
+            # Build waterfall using product rule
+            # Start with base HR
+            waterfall_data = []
+            current_hr = base_hr
+            waterfall_data.append({"Category": "Baseline HR", "Value": current_hr, "Label": f"{base_hr:.1f}"})
+            
+            for key in c_names.keys():
+                if key in target_factors and key in base_factors:
+                    base_val = base_factors[key]
+                    target_val = target_factors[key]
+                    if base_val != 0:
+                        # Impact = current_hr * (target_val / base_val - 1)
+                        impact = current_hr * (target_val / base_val - 1)
+                        current_hr += impact
+                        waterfall_data.append({
+                            "Category": c_names[key],
+                            "Value": impact,
+                            "Label": f"{impact:+.1f}",
+                            "Delta": impact,
+                        })
+            
+            # Final HR
+            waterfall_data.append({"Category": "Final HR", "Value": current_hr, "Label": f"{current_hr:.1f}"})
+            df_waterfall = pd.DataFrame(waterfall_data)
+            
+            # Create waterfall chart using plotly
+            fig_waterfall = go.Figure(go.Waterfall(
+                x=df_waterfall["Category"],
+                y=df_waterfall["Value"],
+                measure=["absolute"] + ["relative"] * (len(df_waterfall) - 2) + ["total"],
+                name="HR Decomposition",
+                text=df_waterfall["Label"],
+                textposition="outside",
+                connector={"line": {"color": "rgb(63, 63, 63)"}},
+                increasing={"marker": {"color": "red"}},
+                decreasing={"marker": {"color": "green"}},
+                totals={"marker": {"color": "darkblue"}},
+            ))
+            fig_waterfall.update_layout(
+                title=f"HR Decomposition: {target_snap} vs {baseline_snap}",
+                xaxis=dict(title="Correction Factor", tickangle=45),
+                yaxis=dict(title=f"Heat Rate ({unit})"),
+                height=450,
+                hovermode="x",
+            )
+            st.plotly_chart(fig_waterfall, use_container_width=True)
+            
+            # Summary metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(f"Baseline HR ({baseline_snap})", f"{base_hr:.1f} {unit}")
+            with col2:
+                st.metric(f"Target HR ({target_snap})", f"{target_hr:.1f} {unit}")
+            with col3:
+                st.metric("Total Delta", f"{delta_total:+.1f} {unit}", 
+                          delta=f"{delta_total/base_hr*100:+.2f}%")
 
-# --- Chart 2: Efficiency Trends ---
-st.subheader("📊 Efficiency Trends")
+st.divider()
 
-fig2 = go.Figure()
+# ---- 4. OPERATING ENVELOPE SCATTER ----
+st.header("📐 4. Operating Envelope Scatter")
+st.markdown("Plots Heat Rate vs Output to identify the optimal (most efficient) load point.")
 
-fig2.add_trace(go.Bar(
-    x=df["snapshot"],
-    y=df["thermal_efficiency_percent"],
-    name="Gross Efficiency (%)",
-    marker_color="seagreen",
-    text=df["thermal_efficiency_percent"].round(2),
-    textposition="outside",
-))
+# Gather data for scatter
+scatter_data = []
+for snap in snapshots:
+    res = gt.calculate(snap)
+    if "error" not in res and res.get("gross_output_mw") is not None and res.get("gross_heat_rate_kj_per_kwh") is not None:
+        mode = get_mode(snap)
+        scatter_data.append({
+            "Snapshot": snap,
+            "Output (MW)": res["gross_output_mw"],
+            "Gross HR": convert_hr(res["gross_heat_rate_kj_per_kwh"], "kJ/kWh"),
+            "Corrected HR": convert_hr(res["corrected_heat_rate_kj_per_kwh"], "kJ/kWh"),
+            "Efficiency (%)": res["thermal_efficiency_percent"],
+            "Mode": str(mode).strip() if mode else "Unknown",
+        })
 
-fig2.add_trace(go.Scatter(
-    x=df["snapshot"],
-    y=df["corrected_efficiency_percent"],
-    name="Corrected Efficiency (%)",
-    mode="lines+markers",
-    marker_color="darkblue",
-    line=dict(width=3, dash="dash"),
-    text=df["corrected_efficiency_percent"].round(2),
-    textposition="top center",
-))
+if not scatter_data:
+    st.warning("Not enough data for envelope analysis.")
+else:
+    df_scatter = pd.DataFrame(scatter_data)
+    
+    fig_scatter = go.Figure()
+    
+    # Add points colored by mode
+    for mode in df_scatter["Mode"].unique():
+        df_mode_sub = df_scatter[df_scatter["Mode"] == mode]
+        fig_scatter.add_trace(go.Scatter(
+            x=df_mode_sub["Output (MW)"],
+            y=df_mode_sub["Gross HR"],
+            mode="markers",
+            name=f"Mode {mode}",
+            marker=dict(size=12),
+            text=df_mode_sub["Snapshot"],
+            hovertemplate="<b>%{text}</b><br>Output: %{x:.1f} MW<br>HR: %{y:.1f} " + unit + "<extra></extra>",
+        ))
+    
+    # Add trend line (polynomial of degree 2 if enough points)
+    if len(df_scatter) > 2:
+        x_vals = df_scatter["Output (MW)"].values
+        y_vals = df_scatter["Gross HR"].values
+        coeffs_env = np.polyfit(x_vals, y_vals, 2)
+        x_smooth = np.linspace(min(x_vals), max(x_vals), 100)
+        y_smooth = np.polyval(coeffs_env, x_smooth)
+        
+        fig_scatter.add_trace(go.Scatter(
+            x=x_smooth,
+            y=y_smooth,
+            mode="lines",
+            name="Polynomial Trend",
+            line=dict(color="gray", dash="dash", width=2),
+        ))
+        
+        # Find the minimum point (sweet spot)
+        # For a quadratic: -b / (2a)
+        a, b, c = coeffs_env
+        if a != 0:
+            sweet_spot = -b / (2 * a)
+            sweet_hr = np.polyval(coeffs_env, sweet_spot)
+            fig_scatter.add_annotation(
+                x=sweet_spot,
+                y=sweet_hr,
+                text=f"Sweet Spot<br>{sweet_spot:.1f} MW<br>{sweet_hr:.1f} {unit}",
+                showarrow=True,
+                arrowhead=2,
+                ax=20,
+                ay=-30,
+            )
+    
+    fig_scatter.update_layout(
+        xaxis=dict(title="Gross Output (MW)"),
+        yaxis=dict(title=f"Gross Heat Rate ({unit})"),
+        height=450,
+        legend=dict(x=0.01, y=0.99),
+        hovermode="closest",
+    )
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
-fig2.update_layout(
-    xaxis=dict(title="Snapshot"),
-    yaxis=dict(title="Efficiency (%)", range=[0, max(df["thermal_efficiency_percent"].max() * 1.2, 50)]),
-    legend=dict(x=0.01, y=0.99),
-    height=400,
-    hovermode="x unified",
-)
+st.divider()
 
-st.plotly_chart(fig2, use_container_width=True)
+# ---- 5. INLET FILTER HEALTH MONITOR ----
+st.header("🧹 5. Inlet Filter Health Monitor")
+st.markdown("Tracks Inlet Pressure Loss (`AFPCS`) over time with an alarm threshold (80 mmWC).")
 
-# --- Chart 3: Correction Factor Trend ---
-st.subheader("📈 Correction Factor Product (C1 × ... × C9)")
+filter_data = []
+for snap in snapshots:
+    dt = get_snapshot_datetime(snap)
+    try:
+        dp = db.value("AFPCS", snap)
+    except:
+        dp = None
+    if dp is not None and dt is not None:
+        filter_data.append({
+            "Snapshot": snap,
+            "Date": dt,
+            "AFPCS (mmWC)": dp,
+        })
 
-fig3 = go.Figure()
+if not filter_data:
+    st.warning("No AFPCS data found.")
+else:
+    df_filter = pd.DataFrame(filter_data).sort_values("Date")
+    
+    # Threshold
+    THRESHOLD = 80.0
+    
+    fig_filter = go.Figure()
+    fig_filter.add_trace(go.Scatter(
+        x=df_filter["Date"],
+        y=df_filter["AFPCS (mmWC)"],
+        mode="lines+markers",
+        name="AFPCS (mmWC)",
+        marker=dict(size=10, color="royalblue"),
+        line=dict(width=2),
+        hovertemplate="<b>%{text}</b><br>Date: %{x}<br>DP: %{y:.2f} mmWC<extra></extra>",
+        text=df_filter["Snapshot"],
+    ))
+    fig_filter.add_hline(
+        y=THRESHOLD,
+        line_dash="dash",
+        line_color="red",
+        annotation_text=f"Alarm Threshold: {THRESHOLD} mmWC",
+        annotation_position="bottom right",
+    )
+    fig_filter.add_hrect(
+        y0=THRESHOLD,
+        y1=df_filter["AFPCS (mmWC)"].max() * 1.1,
+        fillcolor="red",
+        opacity=0.1,
+        line_width=0,
+    )
+    fig_filter.update_layout(
+        xaxis=dict(title="Date"),
+        yaxis=dict(title="Inlet Pressure Loss (mmWC)"),
+        height=400,
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig_filter, use_container_width=True)
+    
+    # Latest status
+    latest = df_filter.iloc[-1]
+    alert = "🔴 ALERT" if latest["AFPCS (mmWC)"] > THRESHOLD else "🟢 OK"
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Latest DP", f"{latest['AFPCS (mmWC)']:.2f} mmWC", delta=f"{latest['AFPCS (mmWC)'] - THRESHOLD:.2f} from threshold")
+    with col2:
+        st.metric("Status", alert)
+    with col3:
+        # Days since first measurement (approx)
+        days = (latest["Date"] - df_filter.iloc[0]["Date"]).days
+        st.metric("Monitoring Period", f"{days} days")
 
-fig3.add_trace(go.Bar(
-    x=df["snapshot"],
-    y=df["correction_factor_product"],
-    name="Total HR Correction",
-    marker_color="purple",
-    text=df["correction_factor_product"].round(4),
-    textposition="outside",
-))
+st.divider()
 
-fig3.add_hline(y=1.0, line_dash="dash", line_color="gray", 
-               annotation_text="ISO Reference (1.0)", annotation_position="bottom right")
+# ---- 6. COMBUSTION & VIBRATION SUMMARY ----
+st.header("🔥 6. Combustion & Vibration Health Summary")
+st.markdown("Exhaust temperature spreads and bearing vibrations — flagged when exceeding typical limits (Spread > 30°C, Vibration > 6 mm/s).")
 
-fig3.update_layout(
-    xaxis=dict(title="Snapshot"),
-    yaxis=dict(title="Correction Factor", range=[0.99, max(df["correction_factor_product"].max() * 1.02, 1.02)]),
-    height=350,
-    hovermode="x unified",
-)
+# Spread tags
+spread_tags = ["TTXSP#1", "TTXSP#2", "TTXSP#3", "TTXSP#4"]
+vibration_tags = [t for t in db.tags() if t.startswith("39V-")]
 
-st.plotly_chart(fig3, use_container_width=True)
+health_data = []
+for snap in snapshots:
+    row = {"Snapshot": snap}
+    # Spreads
+    spreads = []
+    for tag in spread_tags:
+        val = get_spread(snap, tag)
+        if val is not None:
+            spreads.append(val)
+            row[tag] = val
+        else:
+            row[tag] = None
+    row["Max Spread"] = max(spreads) if spreads else None
+    row["Avg Spread"] = np.mean(spreads) if spreads else None
+    
+    # Vibrations
+    vibes = []
+    for tag in vibration_tags:
+        val = get_vibration(snap, tag)
+        if val is not None:
+            vibes.append(val)
+            row[tag] = val
+    row["Max Vibration"] = max(vibes) if vibes else None
+    row["Avg Vibration"] = np.mean(vibes) if vibes else None
+    
+    health_data.append(row)
 
-# --- Data Table ---
-with st.expander("📋 Detailed Data Table"):
-    display_df = df[[
-        "snapshot",
-        "gross_output_mw",
-        "gross_hr_display",
-        "corrected_hr_display",
-        "thermal_efficiency_percent",
-        "corrected_efficiency_percent",
-        "correction_factor_product",
-        "pressure_ratio",
-    ]].copy()
-    display_df.columns = [
-        "Snapshot",
-        "Gross Output (MW)",
-        f"Gross HR ({unit})",
-        f"Corrected HR ({unit})",
-        "Gross Eff (%)",
-        "Corrected Eff (%)",
-        "HR Correction",
-        "Pressure Ratio",
-    ]
-    st.dataframe(display_df.style.format({
-        "Gross Output (MW)": "{:.1f}",
-        f"Gross HR ({unit})": "{:.0f}",
-        f"Corrected HR ({unit})": "{:.0f}",
-        "Gross Eff (%)": "{:.2f}",
-        "Corrected Eff (%)": "{:.2f}",
-        "HR Correction": "{:.6f}",
-        "Pressure Ratio": "{:.2f}",
+df_health = pd.DataFrame(health_data)
+
+# Filter to only show snapshots with some data
+df_health_display = df_health.dropna(subset=["Max Spread", "Max Vibration"], how="all")
+if df_health_display.empty:
+    st.warning("No spread or vibration data available.")
+else:
+    # Style functions
+    def color_spread(val):
+        if val is None:
+            return ""
+        if val > 30:
+            return "background-color: #f8d7da; color: #721c24"
+        elif val > 25:
+            return "background-color: #fff3cd; color: #856404"
+        else:
+            return "background-color: #d4edda; color: #155724"
+    
+    def color_vibration(val):
+        if val is None:
+            return ""
+        if val > 6:
+            return "background-color: #f8d7da; color: #721c24"
+        elif val > 4:
+            return "background-color: #fff3cd; color: #856404"
+        else:
+            return "background-color: #d4edda; color: #155724"
+    
+    # Display table with styling
+    display_cols = ["Snapshot", "Max Spread", "Avg Spread", "Max Vibration", "Avg Vibration"]
+    display_df = df_health_display[display_cols].copy()
+    display_df.columns = ["Snapshot", "Max Spread (°C)", "Avg Spread (°C)", "Max Vibration (mm/s)", "Avg Vibration (mm/s)"]
+    
+    # Apply styling using map
+    styled_health = display_df.style.map(color_spread, subset=["Max Spread (°C)", "Avg Spread (°C)"])
+    styled_health = styled_health.map(color_vibration, subset=["Max Vibration (mm/s)", "Avg Vibration (mm/s)"])
+    
+    st.dataframe(styled_health.format({
+        "Max Spread (°C)": "{:.2f}",
+        "Avg Spread (°C)": "{:.2f}",
+        "Max Vibration (mm/s)": "{:.2f}",
+        "Avg Vibration (mm/s)": "{:.2f}",
     }), use_container_width=True)
+    
+    # Alert summary
+    alert_count = 0
+    alerts = []
+    for _, row in display_df.iterrows():
+        if row["Max Spread (°C)"] and row["Max Spread (°C)"] > 30:
+            alerts.append(f"🔴 {row['Snapshot']}: Spread = {row['Max Spread (°C)']:.1f}°C")
+            alert_count += 1
+        if row["Max Vibration (mm/s)"] and row["Max Vibration (mm/s)"] > 6:
+            alerts.append(f"🔴 {row['Snapshot']}: Vibration = {row['Max Vibration (mm/s)']:.1f} mm/s")
+            alert_count += 1
+    
+    if alerts:
+        st.warning(f"⚠️ {alert_count} alerts detected:")
+        for alert in alerts:
+            st.write(alert)
+    else:
+        st.success("✅ No combustion or vibration alerts. All parameters within healthy limits.")
