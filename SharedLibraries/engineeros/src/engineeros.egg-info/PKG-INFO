@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: engineeros
+Version: 0.1.0
+Summary: Engineering operating system — framework for building plant intelligence platforms
+Author-email: Engineering Platform Team <team@engineeringplatform.com>
+License: Proprietary
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: engineering-core
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: ruff>=0.1; extra == "dev"

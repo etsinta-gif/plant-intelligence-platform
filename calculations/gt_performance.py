@@ -1,61 +1,106 @@
 # calculations/gt_performance.py
 
 import math
-from calculations.fuel_engine import FuelEngine
-from calculations.corrections import GE9FACorrectionEngine
+from pathlib import Path
+import sys
+
+# ---- Add path to SharedLibraries ----
+current_dir = Path(__file__).resolve().parent
+shared_lib = current_dir.parent / "SharedLibraries"
+if shared_lib.exists():
+    sys.path.insert(0, str(shared_lib / "engineeros" / "src"))
+
+from engineeros.services.rule_engine import RuleEngine
+
+# ---- Rule Engine (absolute path) ----
+rules_path = current_dir.parent / "Rules"
+rule_engine = RuleEngine(data_dir=str(rules_path))
+
+# ---- Asset type ----
+# This can be passed as a parameter, but we default to GasTurbine for now.
+ASSET_TYPE = "GasTurbine"
+
 
 class GTPerformance:
     """
-    Main Gas Turbine Performance Calculator for GE 9FA.
-    Integrates fuel properties, raw measurements, and GE 9-Factor corrections.
+    GT Performance calculator using RuleEngine for formulas and constants.
     """
 
     def __init__(self, db):
         self.db = db
-        self.fuel = FuelEngine()
-        self.corrections = GE9FACorrectionEngine(db=db)
+        self.asset_type = ASSET_TYPE
 
     def calculate(self, snapshot: str, apply_corrections: bool = True):
-        """
-        Compute performance for a given snapshot.
-        If apply_corrections=True, corrected HR and efficiency are calculated.
-        Returns a dictionary with all key metrics.
-        """
         try:
-            # ---- 1. Read raw data ----
-            dwatt = self.db.value("DWATT", snapshot)          # MW
-            fqg = self.db.value("FQG", snapshot)              # kg/s (fuel mass flow)
-            ctim = self.db.value("CTIM", snapshot)            # °C (compressor inlet temp)
-            cpd = self.db.value("CPD", snapshot)              # kg/cm² (compressor discharge)
-            afpip = self.db.value("AFPIP", snapshot)          # mmHg (ambient pressure)
+            # ---- Read tags ----
+            dwatt = self.db.value("DWATT", snapshot)
+            fqg = self.db.value("FQG", snapshot)
+            ctim = self.db.value("CTIM", snapshot)
+            cpd = self.db.value("CPD", snapshot)
+            afpip = self.db.value("AFPIP", snapshot)
 
-            # ---- 2. Fuel properties ----
-            lhv_kjkg = self.fuel.lhv_kjkg(snapshot)
+            # ---- Constants ----
+            iso_temp = rule_engine.get_constant("ISO_TEMP")
+            iso_press = rule_engine.get_constant("ISO_PRESS")
+            iso_rh = rule_engine.get_constant("ISO_RH")
 
-            # ---- 3. Unit conversions ----
-            cpd_kpa = cpd * 98.0665 if cpd is not None else None
-            amb_press_kpa = afpip * 0.133322 if afpip is not None else 101.325
+            # ---- Fuel LHV (from fuel_engine or default) ----
+            # We'll get it from a separate method, but for now we can read from a tag or demo assumptions.
+            # For simplicity, use a constant if not available.
+            lhv_kjkg = rule_engine.get_constant("LHV_DEFAULT")
 
-            # ---- 4. Core calculations ----
-            if dwatt and fqg and lhv_kjkg and dwatt > 0:
-                gross_hr = (fqg * 3.6 * lhv_kjkg) / dwatt
+            # ---- Unit conversions ----
+            cpd_kpa = cpd * 98.0665 if cpd else None
+            amb_press_kpa = afpip * 0.133322 if afpip else iso_press
+
+            # ---- Gross Heat Rate (using formula from Rules) ----
+            formula_data = rule_engine.get_formula("HR_GROSS", asset_type=self.asset_type)
+            if formula_data and dwatt and fqg and lhv_kjkg and dwatt != 0:
+                formula_str = formula_data["formula"]
+                # Evaluate the formula with current values
+                context = {"FQG": fqg, "LHV": lhv_kjkg, "DWATT": dwatt}
+                gross_hr = rule_engine._evaluate_formula(formula_str, context)  # We'll add this helper below.
             else:
                 gross_hr = None
 
+            # ---- Efficiency (using formula from Rules) ----
             if gross_hr and gross_hr > 0:
-                efficiency = 3600 / gross_hr * 100.0
+                eff_formula = rule_engine.get_formula("EFFICIENCY_GROSS", asset_type=self.asset_type)
+                if eff_formula:
+                    context = {"HR_GROSS": gross_hr}
+                    efficiency = rule_engine._evaluate_formula(eff_formula["formula"], context)
+                else:
+                    efficiency = 3600 / gross_hr * 100  # fallback
             else:
                 efficiency = None
 
-            if amb_press_kpa and cpd_kpa and amb_press_kpa > 0:
-                pr = cpd_kpa / amb_press_kpa
+            # ---- Pressure Ratio (using formula from Rules) ----
+            pr_formula = rule_engine.get_formula("PRESSURE_RATIO", asset_type=self.asset_type)
+            if pr_formula and amb_press_kpa and cpd_kpa and amb_press_kpa != 0:
+                context = {"CPD": cpd_kpa, "AFPIP": amb_press_kpa}
+                pr = rule_engine._evaluate_formula(pr_formula["formula"], context)
             else:
                 pr = None
 
-            # ---- 5. Apply corrections ----
+            # ---- Correction Factors (using curves from Rules) ----
             if apply_corrections and gross_hr is not None:
-                factors = self.corrections.get_factors(snapshot)
-                corr_factor = factors["hr_correction_factor"]
+                # Evaluate C1..C9 from curves
+                c1 = rule_engine.evaluate_curve("C1_Inlet_Temp", ctim, asset_type=self.asset_type) if ctim else 1.0
+                # C2, C3, C6, C7 – we need to read appropriate tags
+                rh = self.db.value("RH", snapshot) if hasattr(self.db, 'value') else iso_rh
+                c2 = rule_engine.evaluate_curve("C2_Humidity", rh, asset_type=self.asset_type) if rh else 1.0
+                if afpip:
+                    press_mbar = afpip * 1.33322
+                    c3 = rule_engine.evaluate_curve("C3_Ambient_Pressure", press_mbar, asset_type=self.asset_type)
+                else:
+                    c3 = 1.0
+                afpcs = self.db.value("AFPCS", snapshot)
+                c6 = rule_engine.evaluate_curve("C6_Inlet_Loss", afpcs, asset_type=self.asset_type) if afpcs else 1.0
+                exh_loss = self.db.value("96EP#1/2#3", snapshot)
+                c7 = rule_engine.evaluate_curve("C7_Exhaust_Loss", exh_loss, asset_type=self.asset_type) if exh_loss else 1.0
+                # C4, C5, C8, C9 default to 1.0
+                c4 = c5 = c8 = c9 = 1.0
+                corr_factor = c1 * c2 * c3 * c4 * c5 * c6 * c7 * c8 * c9
                 corrected_hr = gross_hr * corr_factor
                 corrected_eff = 3600 / corrected_hr * 100 if corrected_hr else None
             else:
@@ -63,7 +108,6 @@ class GTPerformance:
                 corrected_hr = gross_hr
                 corrected_eff = efficiency
 
-            # ---- 6. Build result ----
             result = {
                 "snapshot": snapshot,
                 "gross_output_mw": dwatt,
@@ -85,56 +129,11 @@ class GTPerformance:
         except Exception as e:
             return {"error": str(e), "snapshot": snapshot}
 
-    # ---- NEW: Compare to baseline (PG Test) ----
-    def compare(self, snapshot: str, baseline_snapshot: str = "PG TEST DATA"):
-        """
-        Compare performance of a snapshot against a baseline (default: PG TEST DATA).
-        Returns a dict with selected data, baseline data, and deltas.
-        """
-        # Calculate both snapshots
-        snap_result = self.calculate(snapshot)
-        base_result = self.calculate(baseline_snapshot)
-
-        if "error" in snap_result:
-            return {"error": f"Error calculating {snapshot}: {snap_result['error']}"}
-        if "error" in base_result:
-            return {"error": f"Error calculating baseline {baseline_snapshot}: {base_result['error']}"}
-
-        # Safely compute deltas (handle None values)
-        def safe_delta(val1, val2):
-            if val1 is None or val2 is None:
-                return None
-            return val1 - val2
-
-        def safe_pct(val1, val2):
-            if val1 is None or val2 is None or val2 == 0:
-                return None
-            return ((val1 - val2) / abs(val2)) * 100
-
-        # Key metrics to compare
-        metrics = [
-            "gross_output_mw",
-            "gross_heat_rate_kj_per_kwh",
-            "thermal_efficiency_percent",
-            "corrected_heat_rate_kj_per_kwh",
-            "corrected_efficiency_percent",
-            "correction_factor_product",
-            "pressure_ratio",
-        ]
-
-        deltas = {}
-        pct_changes = {}
-        for m in metrics:
-            val1 = snap_result.get(m)
-            val2 = base_result.get(m)
-            deltas[m] = safe_delta(val1, val2)
-            pct_changes[m] = safe_pct(val1, val2)
-
-        return {
-            "snapshot": snapshot,
-            "baseline": baseline_snapshot,
-            "selected": snap_result,
-            "baseline_data": base_result,
-            "deltas": deltas,
-            "pct_changes": pct_changes,
-        }
+    # Helper to evaluate formula strings (to avoid exposing eval directly)
+    @staticmethod
+    def _evaluate_formula(formula: str, context: dict) -> float:
+        # We'll use a safe eval with restricted builtins.
+        # Alternatively, we could use a simple parser, but for now we trust the data.
+        safe_builtins = {"abs": abs, "round": round, "min": min, "max": max, "sum": sum, "pow": pow}
+        env = {"__builtins__": safe_builtins, **context}
+        return float(eval(formula, env, {}))

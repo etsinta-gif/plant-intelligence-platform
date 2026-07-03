@@ -1,0 +1,170 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-07-03T12:00:00Z",
+    "status": "approved",
+    "source": "GE 9F.03 OEM & Industry Standards"
+  },
+  "rules": {
+    "Pressure Ratio": {
+      "asset_type": "GasTurbine",
+      "unit": "",
+      "good_low": 15.0,
+      "good_high": null,
+      "warn_low": 14.0,
+      "warn_high": null,
+      "critical_message": "Pressure Ratio is {value:.2f}, below 14.0. Compressor fouling or IGV misalignment likely.",
+      "warning_message": "Pressure Ratio is {value:.2f}, slightly below 15.0. Monitor trend; consider performance check."
+    },
+    "Compressor Temp Rise": {
+      "asset_type": "GasTurbine",
+      "unit": "°C",
+      "good_low": null,
+      "good_high": 410.0,
+      "warn_low": null,
+      "warn_high": 420.0,
+      "critical_message": "Temp Rise is {value:.1f}°C, above 420°C. Excessive = fouling or worn seals. Schedule maintenance.",
+      "warning_message": "Temp Rise is {value:.1f}°C, approaching 410°C. Monitor; consider online wash."
+    },
+    "Inlet Filter DP": {
+      "asset_type": "GasTurbine",
+      "unit": "mmwc",
+      "good_low": null,
+      "good_high": 60.0,
+      "warn_low": null,
+      "warn_high": 80.0,
+      "critical_message": "Filter DP is {value:.1f} mmwc, exceeding 80 mmwc. Replace filters immediately.",
+      "warning_message": "Filter DP is {value:.1f} mmwc, near 60 mmwc. Schedule replacement soon."
+    },
+    "Max Exhaust Spread": {
+      "asset_type": "GasTurbine",
+      "unit": "°C",
+      "good_low": null,
+      "good_high": 30.0,
+      "warn_low": null,
+      "warn_high": 40.0,
+      "critical_message": "Exhaust spread is {value:.1f}°C, above 40°C. Combustor damage likely. Inspect cans and fuel nozzles.",
+      "warning_message": "Exhaust spread is {value:.1f}°C, near 30°C. Uneven combustion. Monitor, consider fuel nozzle inspection."
+    },
+    "Avg Exhaust Spread": {
+      "asset_type": "GasTurbine",
+      "unit": "°C",
+      "good_low": null,
+      "good_high": 25.0,
+      "warn_low": null,
+      "warn_high": 30.0,
+      "critical_message": "Avg exhaust spread is {value:.1f}°C, above 30°C. Uneven combustion.",
+      "warning_message": "Avg exhaust spread is {value:.1f}°C, near 25°C. Monitor."
+    },
+    "Spread to Allowable": {
+      "asset_type": "GasTurbine",
+      "unit": "%",
+      "good_low": null,
+      "good_high": 70.0,
+      "warn_low": null,
+      "warn_high": 80.0,
+      "critical_message": "Spread is {value:.1f}% of allowable. Exceeding 80%. Immediate borescope inspection required.",
+      "warning_message": "Spread is {value:.1f}% of allowable. Approaching 70%. Schedule inspection."
+    },
+    "Flame Stability (Std Dev)": {
+      "asset_type": "GasTurbine",
+      "unit": "%",
+      "good_low": null,
+      "good_high": 3.0,
+      "warn_low": null,
+      "warn_high": 5.0,
+      "critical_message": "Flame std dev is {value:.2f}%, above 5%. Combustion instability detected. Reduce load, check fuel pressure.",
+      "warning_message": "Flame std dev is {value:.2f}%, near 3%. Slight instability. Monitor fuel gas composition."
+    },
+    "Bearing Temp Rise": {
+      "asset_type": "GasTurbine",
+      "unit": "°C",
+      "good_low": null,
+      "good_high": 10.0,
+      "warn_low": null,
+      "warn_high": 15.0,
+      "critical_message": "Bearing temp rise is {value:.1f}°C, above 15°C. Check oil flow, inspect bearing. Immediate action.",
+      "warning_message": "Bearing temp rise is {value:.1f}°C, near 10°C. Monitor oil temperature and vibration."
+    },
+    "Max Vibration": {
+      "asset_type": "GasTurbine",
+      "unit": "mm/s",
+      "good_low": null,
+      "good_high": 5.0,
+      "warn_low": null,
+      "warn_high": 7.0,
+      "critical_message": "Vibration is {value:.2f} mm/s, above 7.0. Stop unit for inspection (rotor imbalance / bearing wear).",
+      "warning_message": "Vibration is {value:.2f} mm/s, near 5.0. Monitor trend; schedule vibration analysis."
+    },
+    "Avg Vibration": {
+      "asset_type": "GasTurbine",
+      "unit": "mm/s",
+      "good_low": null,
+      "good_high": 4.0,
+      "warn_low": null,
+      "warn_high": 5.5,
+      "critical_message": "Avg vibration is {value:.2f} mm/s, above 5.5. Bearing wear likely.",
+      "warning_message": "Avg vibration is {value:.2f} mm/s, near 4.0. Monitor."
+    },
+    "Power Factor": {
+      "asset_type": "GasTurbine",
+      "unit": "",
+      "good_low": 0.90,
+      "good_high": 0.96,
+      "warn_low": 0.85,
+      "warn_high": 0.98,
+      "critical_message": "PF is {value:.3f}, outside 0.85–0.98. Excitation issue or grid demand. Check AVR.",
+      "warning_message": "PF is {value:.3f}, slightly outside optimal 0.90–0.96. Monitor reactive power."
+    },
+    "Fuel per MW": {
+      "asset_type": "GasTurbine",
+      "unit": "kg/MWh",
+      "good_low": null,
+      "good_high": 150.0,
+      "warn_low": null,
+      "warn_high": 160.0,
+      "critical_message": "Fuel per MW is {value:.1f} kg/MWh, above 160. Excessive consumption. Check compressor and combustion.",
+      "warning_message": "Fuel per MW is {value:.1f} kg/MWh, near 150. Monitor heat rate and compressor health."
+    },
+    "Fuel Pressure Drop": {
+      "asset_type": "GasTurbine",
+      "unit": "kg/cm²",
+      "good_low": null,
+      "good_high": 2.0,
+      "warn_low": null,
+      "warn_high": 3.0,
+      "critical_message": "Fuel pressure drop is {value:.2f} kg/cm², above 3.0. Filter blocked. Bypass or replace immediately.",
+      "warning_message": "Fuel pressure drop is {value:.2f} kg/cm², near 2.0. Schedule replacement."
+    },
+    "Gross Heat Rate": {
+      "asset_type": "GasTurbine",
+      "unit": "kJ/kWh",
+      "good_low": null,
+      "good_high": 10000.0,
+      "warn_low": null,
+      "warn_high": 10500.0,
+      "critical_message": "HR is {value:.0f} kJ/kWh, above 10500. Significant degradation. Review compressor, turbine, fuel system.",
+      "warning_message": "HR is {value:.0f} kJ/kWh, near 10000. Monitor trend; investigate degradation."
+    },
+    "Efficiency": {
+      "asset_type": "GasTurbine",
+      "unit": "%",
+      "good_low": 36.0,
+      "good_high": null,
+      "warn_low": 34.0,
+      "warn_high": null,
+      "critical_message": "Efficiency is {value:.1f}%, below 34%. Major maintenance likely required.",
+      "warning_message": "Efficiency is {value:.1f}%, near 36%. Efficiency declining; investigate."
+    },
+    "Load (MW)": {
+      "asset_type": "GasTurbine",
+      "unit": "MW",
+      "good_low": 230.0,
+      "good_high": 260.0,
+      "warn_low": 200.0,
+      "warn_high": 270.0,
+      "critical_message": "Load is {value:.1f} MW, outside 200–270 MW. Check plant dispatch.",
+      "warning_message": "Load is {value:.1f} MW, near 200 or 270 MW. Monitor grid demand."
+    }
+  }
+}

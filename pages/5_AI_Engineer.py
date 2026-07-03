@@ -5,12 +5,28 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from pathlib import Path
+import sys
+
+# ---- Path setup ----
+current_dir = Path(__file__).resolve().parent.parent
+shared_lib = current_dir / "SharedLibraries"
+if shared_lib.exists():
+    sys.path.insert(0, str(shared_lib / "core" / "src"))
+    sys.path.insert(0, str(shared_lib / "engineeros" / "src"))
+
 from calculations.data_engine import EngineeringData
 from calculations.gt_performance import GTPerformance
 from calculations.excel_reader import load_raw_data
+from engineeros.services.rule_engine import RuleEngine
 from utils.unit_helpers import get_heat_rate_unit, set_heat_rate_unit, convert_hr
 
 st.set_page_config(page_title="AI Engineer", layout="wide")
+
+# ---- Rule Engine ----
+rules_path = current_dir / "Rules"
+rule_engine = RuleEngine(data_dir=str(rules_path))
+asset_type = st.session_state.get("asset_type", "GasTurbine")
 
 # ---- Unit selector ----
 with st.sidebar:
@@ -40,8 +56,7 @@ st.title("🧠 AI Engineer – Comprehensive Data Analysis")
 eng = EngineeringData()
 db = eng.db
 gt = GTPerformance(db)
-
-# Get all snapshots
+raw_df = load_raw_data()
 snapshots = db.snapshots_list()
 unit = get_heat_rate_unit()
 
@@ -61,7 +76,7 @@ for tag in all_tags:
 
 df_raw = pd.DataFrame(data_dict)
 
-# ---- 2. Get performance metrics for each snapshot ----
+# ---- 2. Get performance metrics ----
 perf_results = []
 for snap in snapshots:
     res = gt.calculate(snap)
@@ -81,7 +96,7 @@ for snap in snapshots:
         })
 df_perf = pd.DataFrame(perf_results)
 
-# ---- 3. Combine: start with performance metrics, then add raw tags ----
+# ---- 3. Combine ----
 df_combined = df_perf.copy()
 for tag in numeric_tags:
     if tag not in df_combined.columns and tag != "Snapshot":
@@ -137,7 +152,6 @@ with tab2:
                     return "background-color: #f8d7da; color: #721c24"
                 else:
                     return ""
-            # FIX: use .map instead of .applymap
             styled_anom = anomalies.style.map(color_anomaly)
             st.dataframe(styled_anom, use_container_width=True)
             
@@ -157,7 +171,7 @@ with tab2:
         else:
             st.success("✅ No anomalies detected at the current threshold.")
 
-# ---- TAB 3: ABC Analysis ----
+# ---- TAB 3: ABC Analysis (Rule-Driven) ----
 with tab3:
     st.subheader("📈 ABC Analysis – Variability Classification")
     st.markdown("""
@@ -167,6 +181,12 @@ with tab3:
     - **C (Low Variability)** – bottom 50% – stable parameters.
     """)
     
+    # ---- Read thresholds from Rules ----
+    ABC_A = rule_engine.get_constant("ABC_A_THRESHOLD") or 70.0
+    ABC_B = rule_engine.get_constant("ABC_B_THRESHOLD") or 90.0
+    CV_HIGH = rule_engine.get_constant("ABC_CV_HIGH") or 20.0
+    CV_MEDIUM = rule_engine.get_constant("ABC_CV_MEDIUM") or 10.0
+
     numeric_cols = df_plot.select_dtypes(include=[np.number]).columns
     if numeric_cols.empty:
         st.warning("No numeric data available for ABC analysis.")
@@ -188,20 +208,20 @@ with tab3:
             total_cv = cv_df["CV (%)"].sum()
             cv_df["Cumulative %"] = cv_df["CV (%)"].cumsum() / total_cv * 100
             
-            def classify(row):
-                if row["Cumulative %"] <= 70:
+            def classify_cv(row):
+                if row["Cumulative %"] <= ABC_A:
                     return "A (High)"
-                elif row["Cumulative %"] <= 90:
+                elif row["Cumulative %"] <= ABC_B:
                     return "B (Medium)"
                 else:
                     return "C (Low)"
-            cv_df["ABC Class"] = cv_df.apply(classify, axis=1)
+            cv_df["ABC Class"] = cv_df.apply(classify_cv, axis=1)
             
-            # Custom styling without matplotlib
+            # ---- Custom styling using rule thresholds ----
             def color_cv(val):
-                if val > 20:
+                if val > CV_HIGH:
                     return 'background-color: #ffcccc; color: #721c24'
-                elif val > 10:
+                elif val > CV_MEDIUM:
                     return 'background-color: #ffe6b3; color: #7a6000'
                 else:
                     return 'background-color: #ccffcc; color: #006600'
@@ -209,7 +229,7 @@ with tab3:
             styled_cv = cv_df.style.map(color_cv, subset=["CV (%)"])
             st.dataframe(styled_cv, use_container_width=True)
             
-            # Pareto chart
+            # ---- Pareto chart ----
             fig = go.Figure()
             fig.add_trace(go.Bar(
                 x=cv_df["Metric"],
@@ -248,7 +268,7 @@ with tab3:
                 st.subheader("🟢 C (Low)")
                 st.write(cv_df[cv_df["ABC Class"] == "C (Low)"]["Metric"].tolist())
 
-# ---- TAB 4: Correlation Analysis ----
+# ---- TAB 4: Correlations ----
 with tab4:
     st.subheader("🔗 Correlation Matrix & Impact on Heat Rate")
     
@@ -262,7 +282,6 @@ with tab4:
         else:
             corr_matrix = corr_data.corr()
             
-            # Heatmap using plotly (no matplotlib needed)
             fig = go.Figure(data=go.Heatmap(
                 z=corr_matrix.values,
                 x=corr_matrix.columns,
@@ -280,7 +299,6 @@ with tab4:
             )
             st.plotly_chart(fig, use_container_width=True)
             
-            # Top correlates with heat rate
             hr_col = None
             if "gross_heat_rate_kj_per_kwh" in corr_matrix.columns:
                 hr_col = "gross_heat_rate_kj_per_kwh"

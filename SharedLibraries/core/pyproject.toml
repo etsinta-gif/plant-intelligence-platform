@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engineering-core"
+version = "0.1.0"
+description = "Core data models, repositories, and calculation engine for the Engineering Platform"
+readme = "README.md"
+authors = [
+    {name = "Engineering Platform Team", email = "team@engineeringplatform.com"}
+]
+license = {text = "Proprietary"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary>=2.9"]
+test = ["pytest>=7.0", "pytest-cov>=4.0"]
+dev = ["ruff>=0.1", "black>=23.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

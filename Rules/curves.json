@@ -1,0 +1,55 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-07-03T12:00:00Z",
+    "status": "approved",
+    "source": "GE 9F.03 OEM PDF"
+  },
+  "rules": {
+    "C1_Inlet_Temp": {
+      "asset_type": "GasTurbine",
+      "x_label": "Ambient Temp (°C)",
+      "y_label": "C1 Factor",
+      "degree": 1,
+      "coefficients": [0.0002434, 0.99635],
+      "description": "C1 = 1 + 0.0002434 * (T - 15)",
+      "tags": ["correction", "ambient"]
+    },
+    "C2_Humidity": {
+      "asset_type": "GasTurbine",
+      "x_label": "Relative Humidity (%)",
+      "y_label": "C2 Factor",
+      "degree": 1,
+      "coefficients": [-0.0000735, 1.00441],
+      "description": "C2 = 1 - 0.0000735 * (RH - 60)",
+      "tags": ["correction", "ambient"]
+    },
+    "C3_Ambient_Pressure": {
+      "asset_type": "GasTurbine",
+      "x_label": "Ambient Pressure (mbar)",
+      "y_label": "C3 Factor",
+      "degree": 1,
+      "coefficients": [0.0000273, 0.97234],
+      "description": "C3 = 1 + 0.0000273 * (P - 1013.25)",
+      "tags": ["correction", "ambient"]
+    },
+    "C6_Inlet_Loss": {
+      "asset_type": "GasTurbine",
+      "x_label": "Inlet Pressure Loss (mmwc)",
+      "y_label": "C6 Factor",
+      "degree": 1,
+      "coefficients": [-0.00000576, 1.0],
+      "description": "C6 = 1 - 0.00000576 * Loss",
+      "tags": ["correction", "inlet"]
+    },
+    "C7_Exhaust_Loss": {
+      "asset_type": "GasTurbine",
+      "x_label": "Exhaust Pressure Loss (mmwc)",
+      "y_label": "C7 Factor",
+      "degree": 1,
+      "coefficients": [-0.0000603, 1.01688],
+      "description": "C7 = 1 + 0.0000603 * (279.91 - Loss)",
+      "tags": ["correction", "exhaust"]
+    }
+  }
+}
