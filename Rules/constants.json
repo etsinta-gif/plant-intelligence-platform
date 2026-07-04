@@ -1,9 +1,9 @@
 {
   "metadata": {
     "version": "1.0",
-    "last_updated": "2026-07-03T12:00:00Z",
+    "last_updated": "2026-07-04T12:00:00Z",
     "status": "approved",
-    "source": "General Engineering"
+    "source": "General Engineering & GE 9F.03"
   },
   "constants": {
     "ISO_TEMP": 15.0,

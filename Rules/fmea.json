@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-07-04T12:00:00Z",
+    "status": "approved",
+    "asset_type": "GasTurbine",
+    "source": "Industry standards, OEM publications, technical literature"
+  },
+  "failure_modes": [
+    {
+      "id": "FM-001",
+      "component": "Compressor",
+      "failure_mode": "Compressor Fouling",
+      "effects": "Reduced pressure ratio, reduced airflow, increased compressor discharge temperature, reduced efficiency and output.",
+      "causes": "Airborne particles, oil mist, salt ingress, poor inlet air filtration.",
+      "detection_conditions": {
+        "Pressure Ratio": "decreasing_trend",
+        "Compressor Temp Rise": "increasing_trend",
+        "Inlet Filter DP": "increasing_trend"
+      },
+      "severity": 5,
+      "occurrence": 6,
+      "detection": 4,
+      "rpn": 120,
+      "recommended_action": "Perform online/offline compressor wash. Inspect and replace inlet air filters. Monitor trend."
+    },
+    {
+      "id": "FM-002",
+      "component": "Combustor",
+      "failure_mode": "DLN 2.0+ Combustion System Fault",
+      "effects": "High exhaust gas temperature spread, flame instability, high CO/NOx, potential for combustor damage and flame-out.",
+      "causes": "Fuel nozzle wear, fuel gas contamination, control valve (SRV/FSV) faults, gas leak test failure.",
+      "detection_conditions": {
+        "Max Exhaust Spread": "> 30",
+        "Flame Stability (Std Dev)": "> 3",
+        "Fuel Pressure Drop": "increasing_trend"
+      },
+      "severity": 7,
+      "occurrence": 7,
+      "detection": 3,
+      "rpn": 147,
+      "recommended_action": "Perform borescope inspection of combustor cans. Inspect fuel nozzles, SRV, and FSV. Check fuel gas quality."
+    },
+    {
+      "id": "FM-003",
+      "component": "Bearing / Rotor",
+      "failure_mode": "Bearing Wear / Rotor Imbalance",
+      "effects": "High vibration, bearing temperature rise, potential for catastrophic rotor failure.",
+      "causes": "Bearing wear, imbalance, misalignment, oil degradation.",
+      "detection_conditions": {
+        "Max Vibration": "> 5",
+        "Avg Vibration": "> 4",
+        "Bearing Temp Rise": "> 10"
+      },
+      "severity": 9,
+      "occurrence": 3,
+      "detection": 4,
+      "rpn": 108,
+      "recommended_action": "Monitor vibration trend. Schedule vibration analysis and bearing inspection/replacement."
+    },
+    {
+      "id": "FM-004",
+      "component": "Turbine",
+      "failure_mode": "Turbine Blade Cracking / Creep",
+      "effects": "Loss of turbine efficiency, potential for blade failure and catastrophic damage.",
+      "causes": "High firing temperatures, thermal fatigue, cooling air blockage, foreign object damage.",
+      "detection_conditions": {
+        "Exhaust Temperature": "increasing_trend",
+        "Efficiency": "decreasing_trend",
+        "Corrected HR": "increasing_trend"
+      },
+      "severity": 9,
+      "occurrence": 3,
+      "detection": 5,
+      "rpn": 135,
+      "recommended_action": "Monitor hours and starts. Schedule borescope inspection. Plan for hot gas path (HGP) inspection during next outage."
+    },
+    {
+      "id": "FM-005",
+      "component": "Fuel System",
+      "failure_mode": "Gas Fuel Stop Valve (FSV) / Speed Ratio Valve (SRV) Fault",
+      "effects": "Fuel control issues, leading to instability, flame-out, or failure to start.",
+      "causes": "Mechanical wear, control signal issues, hydraulic failure, sticking valve.",
+      "detection_conditions": {
+        "Fuel Pressure Drop": "increasing_trend",
+        "Fuel Flow": "unstable"
+      },
+      "severity": 8,
+      "occurrence": 4,
+      "detection": 3,
+      "rpn": 96,
+      "recommended_action": "Inspect and test FSV and SRV. Check control system feedback and hydraulics."
+    },
+    {
+      "id": "FM-006",
+      "component": "Lube Oil System",
+      "failure_mode": "Lube Oil System Fault",
+      "effects": "Loss of lubrication, increased bearing temperatures, potential for bearing damage and seizure.",
+      "causes": "Pump failure, filter clogging, oil contamination, low oil level, seal leak.",
+      "detection_conditions": {
+        "Bearing Temp Rise": "> 10",
+        "Lube Oil Header Pressure": "decreasing_trend",
+        "Lube Oil Header Temp": "increasing_trend"
+      },
+      "severity": 9,
+      "occurrence": 3,
+      "detection": 4,
+      "rpn": 108,
+      "recommended_action": "Inspect lube oil pumps and filters. Perform oil analysis. Check for leaks and ensure proper oil level."
+    },
+    {
+      "id": "FM-007",
+      "component": "Generator",
+      "failure_mode": "Generator Excitation / Cooling Fault",
+      "effects": "Reduced power output, overheating, potential for generator trip.",
+      "causes": "AVR failure, cooling water system fault, hydrogen purity loss.",
+      "detection_conditions": {
+        "Power Factor": "outside_healthy_range",
+        "Generator Efficiency": "decreasing_trend"
+      },
+      "severity": 7,
+      "occurrence": 3,
+      "detection": 4,
+      "rpn": 84,
+      "recommended_action": "Check AVR and excitation system. Monitor hydrogen purity and cooling water system."
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0",
-    "last_updated": "2026-07-03T12:00:00Z",
+    "last_updated": "2026-07-04T12:00:00Z",
     "status": "approved",
     "source": "GE 9F.03 OEM & Industry Standards"
   },
@@ -14,7 +14,7 @@
       "warn_low": 14.0,
       "warn_high": null,
       "critical_message": "Pressure Ratio is {value:.2f}, below 14.0. Compressor fouling or IGV misalignment likely.",
-      "warning_message": "Pressure Ratio is {value:.2f}, slightly below 15.0. Monitor trend; consider performance check."
+      "warning_message": "Pressure Ratio is {value:.2f}, slightly below 15.0. Monitor trend."
     },
     "Compressor Temp Rise": {
       "asset_type": "GasTurbine",
@@ -44,7 +44,7 @@
       "warn_low": null,
       "warn_high": 40.0,
       "critical_message": "Exhaust spread is {value:.1f}°C, above 40°C. Combustor damage likely. Inspect cans and fuel nozzles.",
-      "warning_message": "Exhaust spread is {value:.1f}°C, near 30°C. Uneven combustion. Monitor, consider fuel nozzle inspection."
+      "warning_message": "Exhaust spread is {value:.1f}°C, near 30°C. Uneven combustion. Monitor."
     },
     "Avg Exhaust Spread": {
       "asset_type": "GasTurbine",
