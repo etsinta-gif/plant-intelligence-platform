@@ -1,0 +1,55 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-07-04T12:00:00Z",
+    "status": "approved",
+    "source": "GE 9F.03 Performance Calculation"
+  },
+  "rules": {
+    "HR_GROSS": {
+      "asset_type": "GasTurbine",
+      "formula": "(FQG * 3.6 * LHV) / DWATT",
+      "inputs": ["FQG", "LHV", "DWATT"],
+      "outputs": ["GROSS_HR"],
+      "unit": "kJ/kWh",
+      "description": "Gross heat rate based on fuel flow and output",
+      "tags": ["heatrate", "performance"]
+    },
+    "EFFICIENCY_GROSS": {
+      "asset_type": "GasTurbine",
+      "formula": "3600 / HR_GROSS * 100",
+      "inputs": ["HR_GROSS"],
+      "outputs": ["EFFICIENCY"],
+      "unit": "%",
+      "description": "Gross thermal efficiency on LHV basis",
+      "tags": ["efficiency", "performance"]
+    },
+    "PRESSURE_RATIO": {
+      "asset_type": "GasTurbine",
+      "formula": "CPD / AFPIP",
+      "inputs": ["CPD", "AFPIP"],
+      "outputs": ["PR"],
+      "unit": "",
+      "description": "Compressor pressure ratio",
+      "tags": ["compressor", "performance"]
+    },
+    "CORRECTED_HR": {
+      "asset_type": "GasTurbine",
+      "formula": "GROSS_HR * CORR_FACTOR",
+      "inputs": ["GROSS_HR", "CORR_FACTOR"],
+      "outputs": ["CORRECTED_HR"],
+      "unit": "kJ/kWh",
+      "description": "Heat rate corrected to ISO conditions using C1..C9",
+      "tags": ["heatrate", "correction"]
+    },
+    "CORR_FACTOR": {
+      "asset_type": "GasTurbine",
+      "formula": "C1 * C2 * C3 * C4 * C5 * C6 * C7 * C8 * C9",
+      "inputs": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9"],
+      "outputs": ["CORR_FACTOR"],
+      "unit": "",
+      "description": "Product of all correction factors (C1..C9)",
+      "tags": ["correction"]
+    }
+  }
+}

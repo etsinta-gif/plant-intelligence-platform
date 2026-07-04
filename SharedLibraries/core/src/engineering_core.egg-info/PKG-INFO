@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: engineering-core
+Version: 0.1.0
+Summary: Core data models, repositories, and calculation engine for the Engineering Platform
+Author-email: Engineering Platform Team <team@engineeringplatform.com>
+License: Proprietary
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: postgres
+Requires-Dist: psycopg2-binary>=2.9; extra == "postgres"
+Provides-Extra: test
+Requires-Dist: pytest>=7.0; extra == "test"
+Requires-Dist: pytest-cov>=4.0; extra == "test"
+Provides-Extra: dev
+Requires-Dist: ruff>=0.1; extra == "dev"
+Requires-Dist: black>=23.0; extra == "dev"

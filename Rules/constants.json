@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-07-04T12:00:00Z",
+    "status": "approved",
+    "source": "General Engineering & GE 9F.03"
+  },
+  "constants": {
+    "ISO_TEMP": 15.0,
+    "ISO_PRESS": 101.325,
+    "ISO_RH": 60.0,
+    "REF_EXHAUST_LOSS": 279.91,
+    "KJ_TO_KCAL": 4.1868,
+    "RATED_MW": 250.0,
+    "LHV_DEFAULT": 48000.0,
+    "AIR_DENSITY": 1.293,
+    "ABC_A_THRESHOLD": 70.0,
+    "ABC_B_THRESHOLD": 90.0,
+    "ABC_CV_HIGH": 20.0,
+    "ABC_CV_MEDIUM": 10.0,
+    "DECIMALS": 2
+  }
+}
